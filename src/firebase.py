@@ -167,11 +167,16 @@ def deploy() -> str | None:
     
     # Extract URL from output
     # Firebase outputs something like: "Hosting URL: https://project-id.web.app"
+    # Note: Firebase CLI may include ANSI escape codes in output, we need to strip them
+    ansi_escape = re.compile(r'\x1b\[[0-9;]*m|\[[0-9;]*m')
+    
     for line in result.stdout.split("\n"):
         if "Hosting URL:" in line:
             url = line.split("Hosting URL:")[-1].strip()
+            # Strip ANSI escape codes from URL
+            url = ansi_escape.sub('', url).strip()
             # #region agent log
-            log_info(f"[DEBUG-CI] Found URL in output: {url}")
+            log_info(f"[DEBUG-CI] Found URL in output (cleaned): {url}")
             # #endregion
             return url
     
