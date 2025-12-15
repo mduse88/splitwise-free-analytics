@@ -59,6 +59,12 @@ Examples:
         help="Save files locally to output/ folder instead of temp files",
     )
     
+    parser.add_argument(
+        "--full-log",
+        action="store_true",
+        help="Enable verbose logging (default: minimal logging for public runs)",
+    )
+    
     return parser.parse_args()
 
 
@@ -189,68 +195,82 @@ def create_local_files(raw_df, timestamp: str) -> tuple[str, str, str]:
 def main() -> None:
     """Main entry point."""
     args = parse_args()
+    full_log = args.full_log
     
-    print(f"=== Starting {app_config.title} ===")
+    def log_info(message: str) -> None:
+        """Minimal logging always shown."""
+        print(message)
+    
+    def log_verbose(message: str) -> None:
+        """Verbose logging shown only when full_log is enabled."""
+        if full_log:
+            print(message)
+    
+    log_info(f"=== Starting {app_config.title} ===")
     
     timestamp = datetime.now().strftime("%Y-%m-%d")
     
     # Local mode: use cached data to avoid API calls
     if args.local:
+        log_info("Mode: local (use cached data if available)")
         raw_df = load_cached_data()
         
         if raw_df is None:
-            print("No cached data found - fetching from Splitwise API...")
+            log_info("No cached data found - fetching from Splitwise API...")
             client = splitwise_client.get_client()
             raw_df = splitwise_client.get_raw_expenses(client)
+        else:
+            log_info("Loaded cached data")
         
         if raw_df.empty:
-            print("ERROR: No data found!")
+            log_info("ERROR: No data found!")
             return
         
-        print(f"Raw data: {len(raw_df)} total records (including payments)")
+        log_verbose(f"Raw data: {len(raw_df)} total records (including payments)")
         
         # Process for dashboard
         processed_df = splitwise_client.process_for_dashboard(raw_df)
         
-        print(f"Dashboard data: {len(processed_df)} expenses")
-        if not processed_df.empty:
-            print(f"Date range: {processed_df['date'].min()} to {processed_df['date'].max()}")
-            print(f"Months found: {processed_df['month_str'].nunique()}")
+        log_verbose(f"Dashboard data: {len(processed_df)} expenses")
+        if not processed_df.empty and full_log:
+            log_verbose(f"Date range: {processed_df['date'].min()} to {processed_df['date'].max()}")
+            log_verbose(f"Months found: {processed_df['month_str'].nunique()}")
         
         summary = stats.calculate_monthly_summary(processed_df)
-        print(f"Monthly summary: {summary['month_name']} - €{summary['total_expenses']:,.2f}")
+        log_verbose(f"Monthly summary: {summary['month_name']} - €{summary['total_expenses']:,.2f}")
         
         json_path, csv_path, html_path = create_local_files(raw_df, timestamp)
         dashboard.generate(processed_df, html_path, summary=summary)
-        print(f"\nFiles saved to output/:")
-        print(f"  - {html_path} (dashboard with {len(processed_df)} expenses)")
-        print(f"  - {json_path} (full backup: {len(raw_df)} records)")
-        print(f"  - {csv_path} (full backup: {len(raw_df)} records)")
-        print(f"\nOpen the dashboard: open {html_path}")
+        log_info("Saved files to output/ (local mode)")
+        log_verbose(f"  - {html_path} (dashboard with {len(processed_df)} expenses)")
+        log_verbose(f"  - {json_path} (full backup: {len(raw_df)} records)")
+        log_verbose(f"  - {csv_path} (full backup: {len(raw_df)} records)")
+        log_verbose(f"Open the dashboard: open {html_path}")
         return
     
     # Cloud mode: always fetch fresh data from Splitwise
-    print("Fetching fresh data from Splitwise API...")
+    log_info("Mode: cloud (fresh fetch from Splitwise API)")
+    log_verbose("Fetching fresh data from Splitwise API...")
     client = splitwise_client.get_client()
     raw_df = splitwise_client.get_raw_expenses(client)
     
-    print(f"Raw data: {len(raw_df)} total records (including payments)")
+    log_verbose(f"Raw data: {len(raw_df)} total records (including payments)")
     
     if raw_df.empty:
-        print("ERROR: No data found! Check API key and group_id.")
+        log_info("ERROR: No data found! Check API key and group_id.")
         return
     
     # Process for dashboard (filter payments, select columns)
     processed_df = splitwise_client.process_for_dashboard(raw_df)
     
-    print(f"Dashboard data: {len(processed_df)} expenses")
-    if not processed_df.empty:
-        print(f"Date range: {processed_df['date'].min()} to {processed_df['date'].max()}")
-        print(f"Months found: {processed_df['month_str'].nunique()}")
+    log_verbose(f"Dashboard data: {len(processed_df)} expenses")
+    if not processed_df.empty and full_log:
+        log_verbose(f"Date range: {processed_df['date'].min()} to {processed_df['date'].max()}")
+        log_verbose(f"Months found: {processed_df['month_str'].nunique()}")
     
     # Calculate monthly summary statistics
     summary = stats.calculate_monthly_summary(processed_df)
-    print(f"Monthly summary: {summary['month_name']} - €{summary['total_expenses']:,.2f}")
+    log_verbose(f"Monthly summary: {summary['month_name']} - €{summary['total_expenses']:,.2f}")
     
     # Cloud mode: use temp files
     temp_files, json_path, csv_path, html_path = create_temp_files(raw_df)
@@ -258,7 +278,8 @@ def main() -> None:
     try:
         # Generate dashboard with processed data and summary
         dashboard.generate(processed_df, html_path, summary=summary)
-        print(f"Generated dashboard with {len(processed_df)} expenses")
+        log_info("Dashboard generated")
+        log_verbose(f"Generated dashboard with {len(processed_df)} expenses")
         
         file_ids = {}
         dashboard_link = None
@@ -283,12 +304,12 @@ def main() -> None:
                         recipient_list = [
                             e.strip() for e in email_config.recipient_email.split(",")
                         ]
-                        print(f"Sharing dashboard with: {', '.join(recipient_list)}")
+                        log_verbose(f"Sharing dashboard with {len(recipient_list)} recipient(s)")
                         gdrive.share_with_emails(dashboard_file_id, recipient_list)
             else:
-                print("Google Drive not configured - skipping upload")
+                log_info("Google Drive not configured - skipping upload")
         else:
-            print("Google Drive upload skipped (--no-upload flag)")
+            log_info("Google Drive upload skipped (--no-upload flag)")
         
         # Send email with summary and Drive link
         if args.email:
@@ -296,10 +317,10 @@ def main() -> None:
                 if dashboard_link:
                     email_sender.send_dashboard(dashboard_link, summary)
                 else:
-                    print("Warning: No dashboard link available - email requires Google Drive upload")
-                    print("Run without --no-upload to enable email with Drive link")
+                    log_info("Warning: No dashboard link available - email requires Google Drive upload")
+                    log_verbose("Run without --no-upload to enable email with Drive link")
             else:
-                print("Email not configured - skipping")
+                log_info("Email not configured - skipping")
     
     finally:
         cleanup_temp_files(temp_files)

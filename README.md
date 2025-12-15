@@ -244,6 +244,9 @@ python family_expenses.py --no-upload
 
 # Generate dashboard locally using cached data (no API calls)
 python family_expenses.py --local
+
+# Enable verbose logging (default is minimal)
+python family_expenses.py --full-log
 ```
 
 ### Local Mode (`--local`)
