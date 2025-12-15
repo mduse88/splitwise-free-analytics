@@ -63,9 +63,9 @@ def _create_credentials() -> Credentials:
 
 def _upload_single_file(service, file_path: str, base_name: str, timestamp: str) -> None:
     """Upload a single file to Google Drive."""
-    # Build timestamped filename
+    # Build timestamped filename (date prefix)
     name_parts = os.path.splitext(base_name)
-    file_name = f"{name_parts[0]}_{timestamp}{name_parts[1]}"
+    file_name = f"{timestamp}_{name_parts[0]}{name_parts[1]}"
     
     # Determine MIME type
     extension = name_parts[1].lower()

@@ -1046,7 +1046,7 @@
 
             const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
             const today = new Date().toISOString().split('T')[0];
-            const filename = `{{ title | lower | replace(' ', '_') }}_${today}.csv`;
+            const filename = `${today}_{{ title | lower | replace(' ', '_') }}.csv`;
 
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');

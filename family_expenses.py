@@ -108,9 +108,9 @@ def create_local_files(raw_df, timestamp: str) -> tuple[str, str, str]:
     output_dir = "output"
     os.makedirs(output_dir, exist_ok=True)
     
-    json_path = os.path.join(output_dir, f"expenses_{timestamp}.json")
-    csv_path = os.path.join(output_dir, f"expenses_{timestamp}.csv")
-    html_path = os.path.join(output_dir, f"expenses_dashboard_{timestamp}.html")
+    json_path = os.path.join(output_dir, f"{timestamp}_expenses.json")
+    csv_path = os.path.join(output_dir, f"{timestamp}_expenses.csv")
+    html_path = os.path.join(output_dir, f"{timestamp}_expenses_dashboard.html")
     
     # Save full raw data for backup
     raw_df.to_json(json_path, orient="records", index=False, indent=2, date_format="iso", default_handler=str)

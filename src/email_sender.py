@@ -52,9 +52,9 @@ A presto!
         part.set_payload(attachment.read())
     
     encoders.encode_base64(part)
-    # Generate filename from title (lowercase, underscores)
+    # Generate filename from title (date prefix, lowercase, underscores)
     safe_title = app_config.title.lower().replace(" ", "_")
-    filename = f"{safe_title}_{datetime.now().strftime('%Y-%m-%d')}.html"
+    filename = f"{datetime.now().strftime('%Y-%m-%d')}_{safe_title}.html"
     part.add_header("Content-Disposition", f"attachment; filename={filename}")
     msg.attach(part)
     

@@ -109,7 +109,7 @@ python family_expenses.py --local
 
 Con `--local`, i file vengono salvati in `output/` e puoi aprire il dashboard nel browser:
 ```bash
-open output/expenses_dashboard_2025-12-10.html
+open output/2025-12-10_expenses_dashboard.html
 ```
 
 ## Automazione con GitHub Actions
@@ -165,9 +165,9 @@ I file vengono caricati direttamente su Google Drive (nessun salvataggio locale)
 
 | File | Contenuto |
 |------|-----------|
-| `expenses_YYYY-MM-DD.json` | **Backup completo**: tutti i record Splitwise con tutti i campi (categoria, utenti, repayments, etc.) |
-| `expenses_YYYY-MM-DD.csv` | **Backup completo**: stessi dati in formato tabellare |
-| `expenses_dashboard_YYYY-MM-DD.html` | **Dashboard**: solo spese (no pagamenti), campi selezionati per visualizzazione |
+| `YYYY-MM-DD_expenses.json` | **Backup completo**: tutti i record Splitwise con tutti i campi (categoria, utenti, repayments, etc.) |
+| `YYYY-MM-DD_expenses.csv` | **Backup completo**: stessi dati in formato tabellare |
+| `YYYY-MM-DD_expenses_dashboard.html` | **Dashboard**: solo spese (no pagamenti), campi selezionati per visualizzazione |
 
 ### Struttura Dati
 
