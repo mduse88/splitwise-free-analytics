@@ -31,7 +31,7 @@ def send_dashboard(dashboard_link: str, summary: dict) -> None:
     msg = MIMEMultipart("alternative")
     msg["From"] = config.gmail_address
     msg["To"] = ", ".join(recipient_list)
-    msg["Subject"] = f"{app_config.title} - {summary['month_name']} Summary"
+    msg["Subject"] = f"{app_config.title} - As of {summary['report_date']}"
     
     # Create plain text version
     plain_body = _create_plain_text_body(dashboard_link, summary)
@@ -76,14 +76,14 @@ def _format_trend(pct: float, direction: str) -> str:
 def _create_plain_text_body(dashboard_link: str, summary: dict) -> str:
     """Create plain text email body."""
     lines = [
-        f"📊 MONTHLY SUMMARY",
+        f"📊 YOUR EXPENSE SUMMARY",
         f"{'═' * 40}",
-        f"Report generated: {summary['report_date']}",
+        f"As of {summary['report_date']}",
         f"",
-        f"{summary['month_name']}",
+        f"Last Full Month: {summary['month_name']}",
         f"Total Expenses:     €{summary['total_expenses']:,.2f} ({summary['expense_count']} transactions)",
-        f"Monthly Average:    €{summary['monthly_avg']:,.2f} (based on {summary['total_months']} months)",
-        f"Trend:              {_format_trend(summary['trend_pct'], summary['trend_direction'])} vs average",
+        f"Your Monthly Avg:   €{summary['monthly_avg']:,.2f} (based on {summary['total_months']} months)",
+        f"Trend:              {_format_trend(summary['trend_pct'], summary['trend_direction'])} vs your average",
         f"",
         f"📈 TOP CATEGORIES",
         f"{'═' * 40}",
@@ -98,7 +98,7 @@ def _create_plain_text_body(dashboard_link: str, summary: dict) -> str:
         f"🔗 VIEW FULL DASHBOARD",
         f"{dashboard_link}",
         f"",
-        f"See you next month!",
+        f"That's all for now — see you next month!",
     ])
     
     return "\n".join(lines)
@@ -133,21 +133,21 @@ def _create_html_body(dashboard_link: str, summary: dict) -> str:
         <div style="background-color: white; border-radius: 12px; padding: 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
             
             <!-- Header -->
-            <h1 style="color: #333; margin: 0 0 5px 0; font-size: 24px;">📊 Monthly Summary</h1>
-            <p style="color: #888; margin: 0 0 25px 0; font-size: 12px;">Report generated: {summary['report_date']}</p>
+            <h1 style="color: #333; margin: 0 0 5px 0; font-size: 24px;">📊 Your Expense Summary</h1>
+            <p style="color: #888; margin: 0 0 25px 0; font-size: 12px;">As of {summary['report_date']}</p>
             
             <!-- Main Stats -->
             <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px; padding: 25px; color: white; margin-bottom: 25px;">
-                <h2 style="margin: 0 0 15px 0; font-size: 18px; opacity: 0.9;">{summary['month_name']}</h2>
+                <h2 style="margin: 0 0 15px 0; font-size: 18px; opacity: 0.9;">Last Full Month: {summary['month_name']}</h2>
                 <div style="font-size: 36px; font-weight: bold; margin-bottom: 5px;">€{summary['total_expenses']:,.2f}</div>
                 <div style="font-size: 14px; opacity: 0.9; margin-bottom: 15px;">{summary['expense_count']} transactions</div>
                 <div style="display: flex; justify-content: space-between; border-top: 1px solid rgba(255,255,255,0.3); padding-top: 15px; margin-top: 10px;">
                     <div>
-                        <div style="font-size: 11px; opacity: 0.8;">Monthly Average</div>
+                        <div style="font-size: 11px; opacity: 0.8;">Your Monthly Average</div>
                         <div style="font-size: 16px; font-weight: 600;">€{summary['monthly_avg']:,.2f}</div>
                     </div>
                     <div style="text-align: right;">
-                        <div style="font-size: 11px; opacity: 0.8;">vs Average</div>
+                        <div style="font-size: 11px; opacity: 0.8;">vs Your Average</div>
                         <div style="font-size: 16px; font-weight: 600;">{trend_text}</div>
                     </div>
                 </div>
@@ -171,13 +171,13 @@ def _create_html_body(dashboard_link: str, summary: dict) -> str:
             <!-- CTA Button -->
             <div style="text-align: center; margin-top: 30px;">
                 <a href="{dashboard_link}" style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; padding: 15px 30px; border-radius: 8px; font-weight: 600; font-size: 14px;">
-                    🔗 View Full Dashboard
+                    View Full Dashboard →
                 </a>
             </div>
             
             <!-- Footer -->
             <p style="color: #888; font-size: 12px; text-align: center; margin-top: 30px;">
-                See you next month! 👋
+                That's all for now — see you next month! 👋
             </p>
         </div>
     </body>
