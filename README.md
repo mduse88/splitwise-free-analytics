@@ -67,8 +67,8 @@ You should see your expenses in an interactive dashboard!
 - **Interactive Dashboard**: Monthly and category charts, dynamic filters, and search
 - **Complete Backup**: JSON and CSV with all Splitwise data (including payments, users, repayments)
 - **Full History**: Retrieves ALL expenses from first to last via automatic pagination
-- **Monthly Automation**: Report sent on the 1st of each month via email
-- **Google Drive Backup**: Automatic cloud storage of data and reports
+- **Rich Email Reports**: Monthly summary with trends, top categories, and Google Drive link (no attachment)
+- **Google Drive Backup**: Automatic cloud storage with file sharing to recipients
 - **Data Export**: Download all data in CSV format from the dashboard
 
 ---
@@ -82,8 +82,9 @@ family_expenses/
 │   ├── config.py           # Configuration and env vars
 │   ├── splitwise_client.py # Splitwise API client
 │   ├── dashboard.py        # Dashboard generation
-│   ├── email_sender.py     # Email sending
-│   └── gdrive.py           # Google Drive upload
+│   ├── email_sender.py     # Email sending (with summary)
+│   ├── gdrive.py           # Google Drive upload & sharing
+│   └── stats.py            # Monthly statistics & trends
 ├── templates/
 │   └── dashboard.html      # Jinja2 template
 ├── Requirements.txt
@@ -261,9 +262,13 @@ This project includes a GitHub workflow that automatically runs the script:
 - **Command**: `python family_expenses.py --email`
 - **What it does**:
   1. Fetches expenses from Splitwise
-  2. Generates the updated dashboard
+  2. Generates the updated dashboard with monthly summary
   3. Uploads files (JSON, CSV, HTML) to Google Drive
-  4. Sends the dashboard via email
+  4. Shares the dashboard with email recipients
+  5. Sends an email with:
+     - Monthly summary (total expenses, trends vs average)
+     - Top categories with individual trends
+     - Google Drive link to the full dashboard (no attachment)
 
 ### Manual Execution
 
@@ -323,6 +328,15 @@ Files are uploaded to Google Drive (no local storage by default):
 **HTML (dashboard)** includes only:
 - Expenses (excluding payments)
 - Fields for visualization: `id`, `description`, `cost`, `currency_code`, `date`, `category_name`
+
+### Monthly Summary & Statistics
+
+The dashboard and email include a monthly summary section with:
+
+- **Last Month's Total**: Sum of all expenses in the most recent complete month
+- **Monthly Average**: Calculated using ALL months between first and last expense (even empty months)
+- **Trend**: Percentage comparison of last month vs the average
+- **Top Categories**: Highest spending categories with individual trend percentages
 
 ---
 

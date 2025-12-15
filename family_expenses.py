@@ -11,7 +11,7 @@ import os
 import tempfile
 from datetime import datetime
 
-from src import splitwise_client, dashboard, gdrive, email_sender
+from src import splitwise_client, dashboard, gdrive, email_sender, stats
 from src.config import app as app_config
 from src.config import gdrive as gdrive_config, email as email_config
 
@@ -26,18 +26,21 @@ Examples:
   # Default: generate dashboard and upload to Google Drive
   python family_expenses.py
 
-  # With email: upload to Google Drive and send email notification
+  # With email: upload to Google Drive and send email with Drive link
   python family_expenses.py --email
 
   # Skip upload (useful for testing)
   python family_expenses.py --no-upload
+
+  # Save files locally to output/ folder
+  python family_expenses.py --local
         """,
     )
     
     parser.add_argument(
         "--email",
         action="store_true",
-        help="Send email notification with the dashboard attached",
+        help="Send email with monthly summary and Google Drive link",
     )
     
     parser.add_argument(
@@ -143,12 +146,16 @@ def main() -> None:
         print(f"Date range: {processed_df['date'].min()} to {processed_df['date'].max()}")
         print(f"Months found: {processed_df['month_str'].nunique()}")
     
+    # Calculate monthly summary statistics
+    summary = stats.calculate_monthly_summary(processed_df)
+    print(f"Monthly summary: {summary['month_name']} - €{summary['total_expenses']:,.2f}")
+    
     timestamp = datetime.now().strftime("%Y-%m-%d")
     
     # Local mode: save to output/ folder
     if args.local:
         json_path, csv_path, html_path = create_local_files(raw_df, timestamp)
-        dashboard.generate(processed_df, html_path)
+        dashboard.generate(processed_df, html_path, summary=summary)
         print(f"\nFiles saved to output/:")
         print(f"  - {html_path} (dashboard with {len(processed_df)} expenses)")
         print(f"  - {json_path} (full backup: {len(raw_df)} records)")
@@ -160,9 +167,12 @@ def main() -> None:
     temp_files, json_path, csv_path, html_path = create_temp_files(raw_df)
     
     try:
-        # Generate dashboard with processed data
-        dashboard.generate(processed_df, html_path)
+        # Generate dashboard with processed data and summary
+        dashboard.generate(processed_df, html_path, summary=summary)
         print(f"Generated dashboard with {len(processed_df)} expenses")
+        
+        file_ids = {}
+        dashboard_link = None
         
         # Upload to Google Drive
         if not args.no_upload:
@@ -172,16 +182,33 @@ def main() -> None:
                     (csv_path, "expenses.csv"),
                     (html_path, "expenses_dashboard.html"),
                 ]
-                gdrive.upload_files(files_to_upload, timestamp)
+                file_ids = gdrive.upload_files(files_to_upload, timestamp)
+                
+                # Get the dashboard file ID for sharing and linking
+                dashboard_file_id = file_ids.get("expenses_dashboard")
+                if dashboard_file_id:
+                    dashboard_link = gdrive.get_view_link(dashboard_file_id)
+                    
+                    # Share with email recipients if email is enabled
+                    if args.email and email_config.is_configured:
+                        recipient_list = [
+                            e.strip() for e in email_config.recipient_email.split(",")
+                        ]
+                        print(f"Sharing dashboard with: {', '.join(recipient_list)}")
+                        gdrive.share_with_emails(dashboard_file_id, recipient_list)
             else:
                 print("Google Drive not configured - skipping upload")
         else:
             print("Google Drive upload skipped (--no-upload flag)")
         
-        # Send email
+        # Send email with summary and Drive link
         if args.email:
             if email_config.is_configured:
-                email_sender.send_dashboard(html_path)
+                if dashboard_link:
+                    email_sender.send_dashboard(dashboard_link, summary)
+                else:
+                    print("Warning: No dashboard link available - email requires Google Drive upload")
+                    print("Run without --no-upload to enable email with Drive link")
             else:
                 print("Email not configured - skipping")
     
@@ -191,4 +218,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

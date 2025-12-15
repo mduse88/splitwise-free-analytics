@@ -18,12 +18,16 @@ MIME_TYPES = {
 }
 
 
-def upload_files(files: list[tuple[str, str]], timestamp: str) -> None:
+def upload_files(files: list[tuple[str, str]], timestamp: str) -> dict[str, str]:
     """Upload files to Google Drive using OAuth credentials.
     
     Args:
         files: List of tuples (local_path, desired_name) to upload.
         timestamp: Timestamp string to add to filenames (e.g., '2025-01-01').
+        
+    Returns:
+        Dictionary mapping base_name (without extension) to file_id.
+        Example: {'expenses': 'abc123', 'expenses_dashboard': 'xyz789'}
         
     Raises:
         ValueError: If Google Drive configuration is incomplete.
@@ -35,16 +39,85 @@ def upload_files(files: list[tuple[str, str]], timestamp: str) -> None:
             "GDRIVE_CLIENT_SECRET, GDRIVE_REFRESH_TOKEN, or GDRIVE_FOLDER_ID"
         )
     
+    file_ids = {}
+    
     try:
         credentials = _create_credentials()
         service = build("drive", "v3", credentials=credentials)
         
         for file_path, base_name in files:
-            _upload_single_file(service, file_path, base_name, timestamp)
+            file_id = _upload_single_file(service, file_path, base_name, timestamp)
+            # Use base name without extension as key
+            key = os.path.splitext(base_name)[0]
+            file_ids[key] = file_id
                 
     except Exception as e:
         print(f"Failed to upload to Google Drive: {e}")
         raise
+    
+    return file_ids
+
+
+def share_with_emails(file_id: str, emails: list[str]) -> None:
+    """Share a file with specific email addresses (viewer permission).
+    
+    Args:
+        file_id: The Google Drive file ID to share.
+        emails: List of email addresses to grant view access.
+        
+    Raises:
+        ValueError: If Google Drive configuration is incomplete.
+    """
+    if not config.is_configured:
+        raise ValueError("Google Drive not configured")
+    
+    credentials = _create_credentials()
+    service = build("drive", "v3", credentials=credentials)
+    
+    for email in emails:
+        permission = {
+            "type": "user",
+            "role": "reader",
+            "emailAddress": email.strip(),
+        }
+        
+        try:
+            service.permissions().create(
+                fileId=file_id,
+                body=permission,
+                sendNotificationEmail=False,  # Don't send Google's default notification
+            ).execute()
+            print(f"Shared file with {email}")
+        except Exception as e:
+            print(f"Warning: Could not share with {email}: {e}")
+
+
+def get_view_link(file_id: str) -> str:
+    """Get the shareable view link for a file.
+    
+    Args:
+        file_id: The Google Drive file ID.
+        
+    Returns:
+        URL to view the file in Google Drive.
+    """
+    return f"https://drive.google.com/file/d/{file_id}/view"
+
+
+def get_service():
+    """Get an authenticated Google Drive service instance.
+    
+    Returns:
+        Google Drive API service object.
+        
+    Raises:
+        ValueError: If Google Drive configuration is incomplete.
+    """
+    if not config.is_configured:
+        raise ValueError("Google Drive not configured")
+    
+    credentials = _create_credentials()
+    return build("drive", "v3", credentials=credentials)
 
 
 def _create_credentials() -> Credentials:
@@ -61,8 +134,18 @@ def _create_credentials() -> Credentials:
     return credentials
 
 
-def _upload_single_file(service, file_path: str, base_name: str, timestamp: str) -> None:
-    """Upload a single file to Google Drive."""
+def _upload_single_file(service, file_path: str, base_name: str, timestamp: str) -> str:
+    """Upload a single file to Google Drive.
+    
+    Args:
+        service: Google Drive API service object.
+        file_path: Local path to the file.
+        base_name: Desired filename (e.g., 'expenses.json').
+        timestamp: Date string to prefix filename.
+        
+    Returns:
+        The file ID of the uploaded file.
+    """
     # Build timestamped filename (date prefix)
     name_parts = os.path.splitext(base_name)
     file_name = f"{timestamp}_{name_parts[0]}{name_parts[1]}"
@@ -78,11 +161,13 @@ def _upload_single_file(service, file_path: str, base_name: str, timestamp: str)
         "parents": [config.folder_id],
     }
     
-    service.files().create(
+    result = service.files().create(
         body=file_metadata,
         media_body=media,
         fields="id",
     ).execute()
     
+    file_id = result.get("id")
     print(f"Uploaded {file_name} to Google Drive")
-
+    
+    return file_id
