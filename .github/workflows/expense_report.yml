@@ -8,11 +8,6 @@ on:
   # Allow manual trigger from GitHub Actions UI
   workflow_dispatch:
     inputs:
-      upload_to_drive:
-        description: 'Upload files to Google Drive'
-        required: false
-        type: boolean
-        default: true
       send_email:
         description: 'Send email notification'
         required: false
@@ -52,16 +47,13 @@ jobs:
         run: |
           ARGS=""
           
-          # Scheduled runs: always upload and email
+          # Scheduled runs: always send email
           if [ "${{ github.event_name }}" = "schedule" ]; then
             ARGS="--email"
           else
-            # Manual runs: check inputs
-            if [ "${{ inputs.upload_to_drive }}" = "false" ]; then
-              ARGS="$ARGS --no-upload"
-            fi
+            # Manual runs: check send_email input
             if [ "${{ inputs.send_email }}" = "true" ]; then
-              ARGS="$ARGS --email"
+              ARGS="--email"
             fi
           fi
           

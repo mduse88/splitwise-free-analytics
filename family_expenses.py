@@ -27,17 +27,20 @@ def parse_args() -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Default: generate dashboard and upload to Google Drive
+  # Fetch fresh data from Splitwise, upload to Google Drive
   python family_expenses.py
 
-  # With email: upload to Google Drive and send email with Drive link
+  # Fetch fresh data, upload to Drive, send email
   python family_expenses.py --email
 
-  # Skip upload (useful for testing)
-  python family_expenses.py --no-upload
-
-  # Save files locally to output/ folder
+  # Use cached data, save to output/, upload to Drive
   python family_expenses.py --local
+
+  # Use cached data, save to output/, upload to Drive, send email
+  python family_expenses.py --local --email
+
+  # Any command with verbose logging
+  python family_expenses.py --local --email --full-log
         """,
     )
     
@@ -48,15 +51,9 @@ Examples:
     )
     
     parser.add_argument(
-        "--no-upload",
-        action="store_true",
-        help="Skip uploading files to Google Drive",
-    )
-    
-    parser.add_argument(
         "--local",
         action="store_true",
-        help="Save files locally to output/ folder instead of temp files",
+        help="Use cached data (Drive → output/ → API) and save files to output/ folder",
     )
     
     parser.add_argument(
@@ -208,9 +205,9 @@ def main() -> None:
     
     timestamp = datetime.now().strftime("%Y-%m-%d")
     
-    # Local mode: use cached data to avoid API calls
+    # Step 1: Get data (--local affects data source only)
     if args.local:
-        log_verbose("Mode: local (use cached data if available)")
+        log_verbose("Data source: cached (Drive → output/ → API fallback)")
         raw_df = load_cached_data()
         
         if raw_df is None:
@@ -219,46 +216,18 @@ def main() -> None:
             raw_df = splitwise_client.get_raw_expenses(client)
         else:
             log_verbose("Loaded cached data")
-        
-        if raw_df.empty:
-            log_info("ERROR: No data found")
-            return
-        
-        log_verbose(f"Raw data: {len(raw_df)} total records (including payments)")
-        
-        # Process for dashboard
-        processed_df = splitwise_client.process_for_dashboard(raw_df)
-        
-        log_verbose(f"Dashboard data: {len(processed_df)} expenses")
-        if not processed_df.empty and full_log:
-            log_verbose(f"Date range: {processed_df['date'].min()} to {processed_df['date'].max()}")
-            log_verbose(f"Months found: {processed_df['month_str'].nunique()}")
-        
-        summary = stats.calculate_monthly_summary(processed_df)
-        log_verbose(f"Monthly summary: {summary['month_name']} - €{summary['total_expenses']:,.2f}")
-        
-        json_path, csv_path, html_path = create_local_files(raw_df, timestamp)
-        dashboard.generate(processed_df, html_path, summary=summary)
-        log_verbose("Saved files to output/ (local mode)")
-        log_verbose(f"  - {html_path} (dashboard with {len(processed_df)} expenses)")
-        log_verbose(f"  - {json_path} (full backup: {len(raw_df)} records)")
-        log_verbose(f"  - {csv_path} (full backup: {len(raw_df)} records)")
-        log_verbose(f"Open the dashboard: open {html_path}")
-        return
-    
-    # Cloud mode: always fetch fresh data from Splitwise
-    log_verbose("Mode: cloud (fresh fetch from Splitwise API)")
-    log_verbose("Fetching fresh data from Splitwise API...")
-    client = splitwise_client.get_client()
-    raw_df = splitwise_client.get_raw_expenses(client)
-    
-    log_verbose(f"Raw data: {len(raw_df)} total records (including payments)")
+    else:
+        log_verbose("Data source: fresh from Splitwise API")
+        client = splitwise_client.get_client()
+        raw_df = splitwise_client.get_raw_expenses(client)
     
     if raw_df.empty:
         log_info("ERROR: No data found")
         return
     
-    # Process for dashboard (filter payments, select columns)
+    log_verbose(f"Raw data: {len(raw_df)} total records (including payments)")
+    
+    # Step 2: Process data for dashboard
     processed_df = splitwise_client.process_for_dashboard(raw_df)
     
     log_verbose(f"Dashboard data: {len(processed_df)} expenses")
@@ -266,62 +235,71 @@ def main() -> None:
         log_verbose(f"Date range: {processed_df['date'].min()} to {processed_df['date'].max()}")
         log_verbose(f"Months found: {processed_df['month_str'].nunique()}")
     
-    # Calculate monthly summary statistics
+    # Step 3: Calculate monthly summary statistics
     summary = stats.calculate_monthly_summary(processed_df)
     log_verbose(f"Monthly summary: {summary['month_name']} - €{summary['total_expenses']:,.2f}")
     
-    # Cloud mode: use temp files
-    temp_files, json_path, csv_path, html_path = create_temp_files(raw_df)
+    # Step 4: Create files (--local affects storage location)
+    temp_files = []
+    if args.local:
+        json_path, csv_path, html_path = create_local_files(raw_df, timestamp)
+        log_verbose("Files saved to output/ folder")
+    else:
+        temp_files, json_path, csv_path, html_path = create_temp_files(raw_df)
+        log_verbose("Files saved to temp folder")
     
     try:
-        # Generate dashboard with processed data and summary
+        # Step 5: Generate dashboard
         dashboard.generate(processed_df, html_path, summary=summary)
-        log_verbose("Dashboard generated")
-        log_verbose(f"Generated dashboard with {len(processed_df)} expenses")
+        log_verbose(f"Dashboard generated with {len(processed_df)} expenses")
         
-        file_ids = {}
+        # Step 6: Upload to Google Drive (always, when configured)
         dashboard_link = None
         
-        # Upload to Google Drive
-        if not args.no_upload:
-            if gdrive_config.is_configured:
-                files_to_upload = [
-                    (json_path, "expenses.json"),
-                    (csv_path, "expenses.csv"),
-                    (html_path, "expenses_dashboard.html"),
-                ]
-                file_ids = gdrive.upload_files(files_to_upload, timestamp)
+        if gdrive_config.is_configured:
+            files_to_upload = [
+                (json_path, "expenses.json"),
+                (csv_path, "expenses.csv"),
+                (html_path, "expenses_dashboard.html"),
+            ]
+            file_ids = gdrive.upload_files(files_to_upload, timestamp)
+            log_verbose("Files uploaded to Google Drive")
+            
+            # Get the dashboard file ID for sharing and linking
+            dashboard_file_id = file_ids.get("expenses_dashboard")
+            if dashboard_file_id:
+                dashboard_link = gdrive.get_view_link(dashboard_file_id)
                 
-                # Get the dashboard file ID for sharing and linking
-                dashboard_file_id = file_ids.get("expenses_dashboard")
-                if dashboard_file_id:
-                    dashboard_link = gdrive.get_view_link(dashboard_file_id)
-                    
-                    # Share with email recipients if email is enabled
-                    if args.email and email_config.is_configured:
-                        recipient_list = [
-                            e.strip() for e in email_config.recipient_email.split(",")
-                        ]
-                        log_verbose(f"Sharing dashboard with {len(recipient_list)} recipient(s)")
-                        gdrive.share_with_emails(dashboard_file_id, recipient_list)
-            else:
-                log_verbose("Google Drive not configured - skipping upload")
+                # Share with email recipients if email is enabled
+                if args.email and email_config.is_configured:
+                    recipient_list = [
+                        e.strip() for e in email_config.recipient_email.split(",")
+                    ]
+                    log_verbose(f"Sharing dashboard with {len(recipient_list)} recipient(s)")
+                    gdrive.share_with_emails(dashboard_file_id, recipient_list)
         else:
-            log_verbose("Google Drive upload skipped (--no-upload flag)")
+            log_verbose("Google Drive not configured - skipping upload")
         
-        # Send email with summary and Drive link
+        # Step 7: Send email (when --email flag is passed)
         if args.email:
-            if email_config.is_configured:
-                if dashboard_link:
-                    email_sender.send_dashboard(dashboard_link, summary)
-                else:
-                    log_info("ERROR: Email requires Google Drive upload")
-                    log_verbose("Run without --no-upload to enable email with Drive link")
-            else:
+            if not gdrive_config.is_configured:
+                log_info("WARNING: Email requires Google Drive - skipping email")
+            elif not email_config.is_configured:
                 log_verbose("Email not configured - skipping")
+            elif dashboard_link:
+                email_sender.send_dashboard(dashboard_link, summary)
+                log_verbose("Email sent")
+            else:
+                log_info("WARNING: No dashboard link available - skipping email")
+        
+        # Show local file path if in local mode
+        if args.local:
+            log_verbose(f"Open the dashboard: open {html_path}")
     
     finally:
-        cleanup_temp_files(temp_files)
+        # Only cleanup temp files (not local files)
+        if temp_files:
+            cleanup_temp_files(temp_files)
 
 
 if __name__ == "__main__":

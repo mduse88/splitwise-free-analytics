@@ -266,19 +266,32 @@ RECIPIENT_EMAIL=recipient1@email.com,recipient2@email.com
 
 | Command | Description |
 |---------|-------------|
-| `python family_expenses.py` | Fetch data from Splitwise and upload to Google Drive |
+| `python family_expenses.py` | Fetch fresh data from Splitwise, upload to Google Drive |
 | `python family_expenses.py --email` | Same as above, plus send an email report |
-| `python family_expenses.py --local` | Generate dashboard locally using cached data (no API calls if cache exists) |
-| `python family_expenses.py --no-upload` | Generate dashboard without uploading to Google Drive |
+| `python family_expenses.py --local` | Use cached data, save to `output/`, upload to Google Drive |
+| `python family_expenses.py --local --email` | Same as above, plus send an email report |
 | `python family_expenses.py --full-log` | Enable verbose logging for troubleshooting |
 
-You can combine flags: `python family_expenses.py --local --full-log`
+You can combine flags: `python family_expenses.py --local --email --full-log`
+
+### CLI Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--local` | off | Use cached data (Drive → output/ → API) and save files to `output/` |
+| `--email` | off | Send email summary with Google Drive link |
+| `--full-log` | off | Enable verbose logging |
+
+**Google Drive upload** always happens when configured (no flag needed).
 
 ### Local Mode (`--local`)
 
-The `--local` flag generates a dashboard without uploading to Google Drive. It uses cached data when available to minimize API calls.
+The `--local` flag affects two things:
 
-**Data source priority:**
+1. **Data source**: Uses cached data instead of fetching fresh from Splitwise
+2. **File storage**: Saves files to `output/` folder (in addition to uploading to Drive)
+
+**Data source priority** (when `--local` is used):
 
 1. Google Drive cache (most recent `*_expenses.json`)
 2. Local `output/` folder cache
@@ -315,11 +328,10 @@ You can trigger the workflow at any time:
 
 1. Go to **Actions** → **Monthly Expense Report** → **Run workflow**
 2. Configure options:
-   - **Upload files to Google Drive** — enabled by default
    - **Send email notification** — enabled by default
 3. Click **Run workflow**
 
-> **Tip:** Disable email notifications when testing to avoid unnecessary emails.
+> **Tip:** Disable email notification when testing to avoid unnecessary emails.
 
 ### GitHub Secrets
 
