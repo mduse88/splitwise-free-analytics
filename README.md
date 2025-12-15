@@ -1,32 +1,37 @@
 # Splitwise Expense Dashboard
 
-A self-hosted application to track expenses from Splitwise, visualize them in an interactive dashboard, and receive automated reports via email.
+Track your Splitwise expenses with an interactive dashboard, automatic cloud backups, and monthly email reports.
 
-> **Customizable**: Configure the dashboard title via the `DASHBOARD_TITLE` environment variable.
+![Python](https://img.shields.io/badge/python-3.11+-blue.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+
+## Overview
+
+This application connects to your Splitwise account, fetches your expense history, and generates:
+
+- **Interactive HTML Dashboard** — Charts, filters, and monthly summaries
+- **Complete Data Backup** — JSON and CSV files with all your Splitwise data
+- **Email Reports** — Monthly summaries sent directly to your inbox
 
 ---
 
-## Quick Start (Template Users)
+## Getting Started
 
-If you're setting up this project from the template, follow these steps:
+### Prerequisites
 
-### 1. Create Your Repository
+- Python 3.11 or higher
+- A [Splitwise](https://www.splitwise.com) account with expenses
 
-You should see the "Create a new repository" form. Fill in:
-- **Repository name**: Choose a name (e.g., `my-expenses`)
-- **Description**: (Optional) Add a description
-- **Public/Private**: Choose your preferred visibility
+### Installation
 
-Click **"Create repository"** to create your copy.
-
-### 2. Clone Your New Repository
+**1. Clone this repository**
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/your-repo-name.git
-cd your-repo-name
+git clone https://github.com/mduse88/family_expenses.git
+cd family_expenses
 ```
 
-### 3. Set Up Python Environment
+**2. Create a virtual environment and install dependencies**
 
 ```bash
 python3 -m venv venv
@@ -34,173 +39,200 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r Requirements.txt
 ```
 
-### 4. Configure Environment Variables
+**3. Get your Splitwise API key**
+
+1. Visit [Splitwise Apps](https://secure.splitwise.com/apps) and register a new application
+2. Copy the **API Key** (see [Splitwise API Key](#splitwise-api-key-required) for detailed steps)
+
+**4. Configure your credentials**
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` with your credentials (see [Prerequisites](#prerequisites) for how to obtain them):
+Open `.env` in a text editor and add your API key:
 
 ```env
 # Required
 api_key=YOUR_SPLITWISE_API_KEY
 
-# Optional
+# Optional: limit to a specific Splitwise group
 group_id=YOUR_GROUP_ID
+
+# Optional: customize the dashboard title
 DASHBOARD_TITLE=My Family Expenses
 ```
 
-### 5. Test Locally
+**5. Generate your dashboard**
 
 ```bash
 python family_expenses.py --local
+```
+
+This creates three files in the `output/` folder:
+
+| File | Description |
+|------|-------------|
+| `YYYY-MM-DD_expenses.json` | Complete backup of all Splitwise data |
+| `YYYY-MM-DD_expenses.csv` | Same data in spreadsheet format |
+| `YYYY-MM-DD_expenses_dashboard.html` | Interactive dashboard |
+
+**6. Open the dashboard**
+
+```bash
 open output/*_expenses_dashboard.html
 ```
 
-You should see your expenses in an interactive dashboard!
+You should see your expenses displayed with charts, filters, and a monthly summary.
+
+### Optional: Cloud Backup & Email Reports
+
+To enable automatic Google Drive backups and email reports:
+
+1. Set up [Google Drive OAuth](#google-drive-oauth-for-cloud-backup) credentials
+2. Set up a [Gmail App Password](#gmail-app-password-for-email-automation)
+3. Run with additional flags:
+
+```bash
+# Upload to Google Drive
+python family_expenses.py
+
+# Upload and send email report
+python family_expenses.py --email
+```
+
+### Optional: Automated Monthly Reports
+
+Set up GitHub Actions to run automatically on the 1st of each month. See [GitHub Actions Automation](#github-actions-automation) for setup instructions.
 
 ---
 
 ## Features
 
-- **Interactive Dashboard**: Monthly and category charts, dynamic filters, and search
-- **Complete Backup**: JSON and CSV with all Splitwise data (including payments, users, repayments)
-- **Full History**: Retrieves ALL expenses from first to last via automatic pagination
-- **Rich Email Reports**: Monthly summary with trends, top categories, and Google Drive link (no attachment)
-- **Google Drive Backup**: Automatic cloud storage with file sharing to recipients
-- **Data Export**: Download all data in CSV format from the dashboard
+| Feature | Description |
+|---------|-------------|
+| **Interactive Dashboard** | Monthly spending charts, category breakdown, filters, and search |
+| **Complete Data Backup** | JSON and CSV exports with all Splitwise fields (payments, users, repayments) |
+| **Full History Retrieval** | Fetches all expenses from your first to your most recent via automatic pagination |
+| **Email Reports** | Monthly summary with spending trends, top categories, and a link to the dashboard |
+| **Google Drive Integration** | Automatic cloud backup with optional sharing to family members |
+| **CSV Export** | Download filtered data directly from the dashboard |
 
 ---
 
 ## Project Structure
 
 ```
-family_expenses/
-├── family_expenses.py      # CLI entry point
+├── family_expenses.py          # Main CLI application
 ├── src/
-│   ├── config.py           # Configuration and env vars
-│   ├── splitwise_client.py # Splitwise API client
-│   ├── dashboard.py        # Dashboard generation
-│   ├── email_sender.py     # Email sending (with summary)
-│   ├── gdrive.py           # Google Drive upload & sharing
-│   └── stats.py            # Monthly statistics & trends
+│   ├── config.py               # Environment configuration
+│   ├── splitwise_client.py     # Splitwise API integration
+│   ├── dashboard.py            # HTML dashboard generator
+│   ├── email_sender.py         # Email report sender
+│   ├── gdrive.py               # Google Drive integration
+│   └── stats.py                # Statistics calculations
 ├── templates/
-│   └── dashboard.html      # Jinja2 template
-├── Requirements.txt
-└── .github/workflows/
-    └── expense_report.yml  # GitHub Actions automation
+│   └── dashboard.html          # Dashboard template (Jinja2)
+├── .github/workflows/
+│   └── expense_report.yml      # GitHub Actions workflow
+└── Requirements.txt            # Python dependencies
 ```
 
 ---
 
-## Prerequisites
+## Configuration Details
 
-Before using this application, you need to obtain credentials for the services you want to use.
+This section provides detailed setup instructions for each integration.
 
 ### Splitwise API Key (Required)
 
 <details>
-<summary><strong>Click to expand: How to get your Splitwise API Key</strong></summary>
+<summary>How to get your Splitwise API Key</summary>
 
-1. Go to [https://secure.splitwise.com/apps](https://secure.splitwise.com/apps)
-2. Click **"Register your application"**
+1. Go to [Splitwise Apps](https://secure.splitwise.com/apps)
+2. Click **Register your application**
 3. Fill in the form:
-   - **Application name**: `Expense Dashboard` (or any name)
-   - **Description**: `Personal expense tracking`
-   - **Homepage URL**: `https://github.com` (or any URL)
-4. Click **"Register and get API key"**
+   - Application name: `Expense Dashboard`
+   - Description: `Personal expense tracking`
+   - Homepage URL: `https://github.com`
+4. Click **Register and get API key**
 5. Copy the **API Key** (not the Consumer Key/Secret)
 
-**Find your Group ID** (optional):
-- Open Splitwise in your browser
-- Go to your group
-- The URL will be: `https://www.splitwise.com/groups/XXXXXXX`
-- The number `XXXXXXX` is your Group ID
+**Finding your Group ID** (optional):
+
+Open Splitwise in your browser, navigate to your group, and copy the number from the URL:
+`https://www.splitwise.com/groups/XXXXXXX` → `XXXXXXX` is your Group ID
 
 </details>
 
-### Gmail App Password (For Email Automation)
+### Gmail App Password (Optional)
 
 <details>
-<summary><strong>Click to expand: How to create a Gmail App Password</strong></summary>
+<summary>How to create a Gmail App Password</summary>
 
-> **Note**: You must have 2-Step Verification enabled on your Google Account.
+> **Requirement:** 2-Step Verification must be enabled on your Google Account.
 
-1. Go to [https://myaccount.google.com/security](https://myaccount.google.com/security)
-2. Under "Signing in to Google", click **"2-Step Verification"**
-3. Scroll to the bottom and click **"App passwords"**
-4. Select app: **"Mail"**
-5. Select device: **"Other (Custom name)"** → Enter `Expense Dashboard`
-6. Click **"Generate"**
-7. Copy the 16-character password (e.g., `abcd efgh ijkl mnop`)
+1. Go to [Google Account Security](https://myaccount.google.com/security)
+2. Under "Signing in to Google", click **2-Step Verification**
+3. Scroll down and click **App passwords**
+4. Select app: **Mail**
+5. Select device: **Other (Custom name)** → Enter `Expense Dashboard`
+6. Click **Generate**
+7. Copy the 16-character password
 
-**Important**: Store this password securely - you won't be able to see it again!
+> **Note:** Store this password securely — you cannot view it again.
 
 </details>
 
-### Google Drive OAuth (For Cloud Backup)
+### Google Drive OAuth (Optional)
 
 <details>
-<summary><strong>Click to expand: How to set up Google Drive OAuth</strong></summary>
+<summary>How to set up Google Drive OAuth</summary>
 
-#### Step 1: Create a Google Cloud Project
+**Step 1: Create a Google Cloud Project**
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project (or select an existing one)
-3. Go to **APIs & Services** → **Library**
-4. Search for **"Google Drive API"** and enable it
+2. Create a new project or select an existing one
+3. Navigate to **APIs & Services** → **Library**
+4. Search for **Google Drive API** and enable it
 
-#### Step 2: Configure OAuth Consent Screen
+**Step 2: Configure OAuth Consent Screen**
 
 1. Go to **APIs & Services** → **OAuth consent screen**
-2. Select **"External"** user type
-3. Fill in required fields:
-   - App name: `Expense Dashboard`
-   - User support email: Your email
-   - Developer contact: Your email
-4. Click **"Save and Continue"**
-5. On Scopes page, click **"Add or Remove Scopes"**
-6. Search and add: `https://www.googleapis.com/auth/drive.file`
-7. Save and continue through the remaining steps
+2. Select **External** user type
+3. Fill in required fields (App name, support email, developer contact)
+4. On the Scopes page, add: `https://www.googleapis.com/auth/drive.file`
+5. Complete the remaining steps
 
-#### Step 3: Create OAuth Credentials
+**Step 3: Create OAuth Credentials**
 
 1. Go to **APIs & Services** → **Credentials**
-2. Click **"Create Credentials"** → **"OAuth client ID"**
-3. Application type: **"Desktop app"**
-4. Name: `Expense Dashboard`
-5. Click **"Create"**
-6. Download the JSON file
+2. Click **Create Credentials** → **OAuth client ID**
+3. Select **Desktop app** as the application type
+4. Download the JSON credentials file
 
-#### Step 4: Get Refresh Token
+**Step 4: Generate Refresh Token**
 
-Run the helper script included in this project:
+Run the included helper script:
 
 ```bash
-python get_gdrive_token.py path/to/downloaded-credentials.json
+python get_gdrive_token.py path/to/credentials.json
 ```
 
-This will:
-1. Open a browser for authentication
-2. Print your `GDRIVE_CLIENT_ID`, `GDRIVE_CLIENT_SECRET`, and `GDRIVE_REFRESH_TOKEN`
+This opens a browser for authentication and outputs your `GDRIVE_CLIENT_ID`, `GDRIVE_CLIENT_SECRET`, and `GDRIVE_REFRESH_TOKEN`.
 
-#### Step 5: Create a Google Drive Folder
+**Step 5: Create a Backup Folder**
 
-1. Go to [Google Drive](https://drive.google.com)
-2. Create a new folder for your backups
-3. Open the folder
-4. Copy the folder ID from the URL: `https://drive.google.com/drive/folders/FOLDER_ID`
+1. Create a folder in [Google Drive](https://drive.google.com)
+2. Copy the folder ID from the URL: `drive.google.com/drive/folders/FOLDER_ID`
 
 </details>
 
 ---
 
-## Local Setup
+## Environment Variables
 
-### Environment Variables
-
-Create a `.env` file with the following variables:
+Create a `.env` file in the project root with the following variables:
 
 ```env
 # Branding (optional)
@@ -230,43 +262,30 @@ RECIPIENT_EMAIL=recipient1@email.com,recipient2@email.com
 | `GDRIVE_*` | No | Google Drive OAuth credentials |
 | `GMAIL_*` | No | Gmail credentials for email automation |
 
-### Usage
+### Command Reference
 
-```bash
-# Generate dashboard and upload to Google Drive (fetches fresh data from Splitwise)
-python family_expenses.py
+| Command | Description |
+|---------|-------------|
+| `python family_expenses.py` | Fetch data from Splitwise and upload to Google Drive |
+| `python family_expenses.py --email` | Same as above, plus send an email report |
+| `python family_expenses.py --local` | Generate dashboard locally using cached data (no API calls if cache exists) |
+| `python family_expenses.py --no-upload` | Generate dashboard without uploading to Google Drive |
+| `python family_expenses.py --full-log` | Enable verbose logging for troubleshooting |
 
-# Generate dashboard and send email
-python family_expenses.py --email
-
-# Generate dashboard without Drive upload (uses temp files)
-python family_expenses.py --no-upload
-
-# Generate dashboard locally using cached data (no API calls)
-python family_expenses.py --local
-
-# Enable verbose logging (default is minimal)
-python family_expenses.py --full-log
-```
+You can combine flags: `python family_expenses.py --local --full-log`
 
 ### Local Mode (`--local`)
 
-The `--local` flag is designed for quick testing and development without making unnecessary API calls to Splitwise.
+The `--local` flag generates a dashboard without uploading to Google Drive. It uses cached data when available to minimize API calls.
 
-**How it works:**
+**Data source priority:**
 
-1. **Tries Google Drive cache first** — Downloads the most recent `*_expenses.json` from your Google Drive folder
-2. **Falls back to local cache** — If Google Drive is unavailable, uses the most recent file in `output/`
-3. **Falls back to Splitwise API** — Only calls the API if no cached data exists anywhere
+1. Google Drive cache (most recent `*_expenses.json`)
+2. Local `output/` folder cache
+3. Splitwise API (only if no cache exists)
 
-**Benefits:**
-- Fast dashboard generation (no API latency)
-- Reduced Splitwise API usage
-- Works offline if you have local cached files
-- Uses the same data that was last uploaded to Drive
+**Output files** are saved to `output/` with a date prefix:
 
-**Output:**
-Files are saved to `output/` folder with date prefix:
 ```
 output/
 ├── 2025-12-15_expenses.json
@@ -274,121 +293,113 @@ output/
 └── 2025-12-15_expenses_dashboard.html
 ```
 
-If files with the same date already exist, they are replaced.
-
-```bash
-# Open the generated dashboard
-open output/2025-12-15_expenses_dashboard.html
-```
+Files with the same date are automatically replaced.
 
 ---
 
 ## GitHub Actions Automation
 
-This project includes a GitHub workflow that automatically runs the script:
+This repository includes a GitHub Actions workflow that runs automatically on the 1st of each month at 8:00 AM CET.
 
-- **When**: 1st of each month at 8:00 AM CET
-- **Command**: `python family_expenses.py --email`
-- **What it does**:
-  1. Fetches expenses from Splitwise
-  2. Generates the updated dashboard with monthly summary
-  3. Uploads files (JSON, CSV, HTML) to Google Drive
-  4. Shares the dashboard with email recipients
-  5. Sends an email with:
-     - Monthly summary (total expenses, trends vs average)
-     - Top categories with individual trends
-     - Google Drive link to the full dashboard (no attachment)
+**What the workflow does:**
 
-### Manual Execution
+1. Fetches all expenses from Splitwise
+2. Generates an updated dashboard with monthly statistics
+3. Uploads backup files (JSON, CSV, HTML) to Google Drive
+4. Shares the dashboard with configured recipients
+5. Sends an email report with spending summary and trends
 
-You can run the workflow manually from GitHub Actions with configurable options:
+### Running Manually
+
+You can trigger the workflow at any time:
 
 1. Go to **Actions** → **Monthly Expense Report** → **Run workflow**
 2. Configure options:
-   - **Upload files to Google Drive**: ✅ enabled by default
-   - **Send email notification**: ✅ enabled by default
+   - **Upload files to Google Drive** — enabled by default
+   - **Send email notification** — enabled by default
 3. Click **Run workflow**
 
-Useful for testing: disable "Send email" to verify only the Drive upload.
+> **Tip:** Disable email notifications when testing to avoid unnecessary emails.
 
-### GitHub Secrets Configuration
+### GitHub Secrets
 
-Add these secrets in your repository settings (Settings → Secrets and variables → Actions → **Secrets** tab):
+Navigate to **Settings** → **Secrets and variables** → **Actions** → **Secrets** tab:
 
-| Secret | Description |
-|--------|-------------|
-| `SPLITWISE_API_KEY` | Your Splitwise API Key |
-| `SPLITWISE_GROUP_ID` | (Optional) Splitwise Group ID |
-| `GMAIL_ADDRESS` | Your Gmail sender address |
-| `GMAIL_APP_PASSWORD` | Gmail App Password (16 characters) |
-| `GDRIVE_CLIENT_ID` | Google OAuth Client ID |
-| `GDRIVE_CLIENT_SECRET` | Google OAuth Client Secret |
-| `GDRIVE_REFRESH_TOKEN` | Google OAuth Refresh Token |
-| `GDRIVE_FOLDER_ID` | Google Drive folder ID for backups |
+| Secret | Required | Description |
+|--------|----------|-------------|
+| `SPLITWISE_API_KEY` | Yes | Your Splitwise API Key |
+| `SPLITWISE_GROUP_ID` | No | Splitwise Group ID (omit to fetch all groups) |
+| `GMAIL_ADDRESS` | For email | Gmail sender address |
+| `GMAIL_APP_PASSWORD` | For email | Gmail App Password (16 characters) |
+| `GDRIVE_CLIENT_ID` | For backup | Google OAuth Client ID |
+| `GDRIVE_CLIENT_SECRET` | For backup | Google OAuth Client Secret |
+| `GDRIVE_REFRESH_TOKEN` | For backup | Google OAuth Refresh Token |
+| `GDRIVE_FOLDER_ID` | For backup | Google Drive folder ID |
 
-### GitHub Variables Configuration
+### GitHub Variables
 
-Add these variables (Settings → Secrets and variables → Actions → **Variables** tab):
+Navigate to **Settings** → **Secrets and variables** → **Actions** → **Variables** tab:
 
-| Variable | Description |
-|----------|-------------|
-| `RECIPIENT_EMAIL` | Comma-separated recipient emails (e.g., `email1@gmail.com,email2@gmail.com`) |
-| `DASHBOARD_TITLE` | (Optional) Custom dashboard title |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `RECIPIENT_EMAIL` | For email | Comma-separated email addresses |
+| `DASHBOARD_TITLE` | No | Custom dashboard title |
 
 ---
 
 ## Output Files
 
-Files are uploaded to Google Drive (no local storage by default):
+Each run generates three files with a date prefix (e.g., `2025-12-15`):
 
-| File | Contents |
-|------|----------|
-| `YYYY-MM-DD_expenses.json` | **Complete backup**: all Splitwise records with all fields (category, users, repayments, etc.) |
-| `YYYY-MM-DD_expenses.csv` | **Complete backup**: same data in tabular format |
-| `YYYY-MM-DD_expenses_dashboard.html` | **Dashboard**: expenses only (no payments), selected fields for visualization |
+| File | Description |
+|------|-------------|
+| `*_expenses.json` | Complete backup — all Splitwise records with full details |
+| `*_expenses.csv` | Complete backup — same data in spreadsheet format |
+| `*_expenses_dashboard.html` | Interactive dashboard — expenses only, optimized for visualization |
 
-### Data Structure
+### What's Included
 
-**JSON/CSV (complete backup)** includes:
-- All records (expenses + payments/settlements)
-- All Splitwise fields: `id`, `description`, `cost`, `date`, `category`, `repayments`, `users`, `created_by`, `receipt`, etc.
-- Fully deserialized nested objects (e.g., `category: {id, name, subcategories}`)
+**JSON/CSV backups** contain all Splitwise data:
+- Expenses and payment settlements
+- Full record details: `id`, `description`, `cost`, `date`, `category`, `repayments`, `users`, etc.
 
-**HTML (dashboard)** includes only:
-- Expenses (excluding payments)
-- Fields for visualization: `id`, `description`, `cost`, `currency_code`, `date`, `category_name`
+**HTML dashboard** contains:
+- Expenses only (payments excluded)
+- Fields needed for charts and filtering: `date`, `description`, `cost`, `category_name`
 
-### Monthly Summary & Statistics
+### Monthly Statistics
 
-The dashboard and email include a monthly summary section with:
+The dashboard and email reports include:
 
-- **Last Month's Total**: Sum of all expenses in the most recent complete month
-- **Monthly Average**: Calculated using ALL months between first and last expense (even empty months)
-- **Trend**: Percentage comparison of last month vs the average
-- **Top Categories**: Highest spending categories with individual trend percentages
+| Metric | Description |
+|--------|-------------|
+| **Last Month Total** | Sum of expenses in the most recent complete month |
+| **Monthly Average** | Average across all months (including months with no expenses) |
+| **Trend** | Percentage change compared to your average |
+| **Top Categories** | Highest spending categories with individual trends |
 
 ---
 
 ## Troubleshooting
 
-### "Missing api_key environment variable"
-- Ensure your `.env` file exists and contains `api_key=YOUR_KEY`
-- Verify the API key is correct at [Splitwise Apps](https://secure.splitwise.com/apps)
+| Error | Solution |
+|-------|----------|
+| "Missing api_key environment variable" | Ensure `.env` exists and contains `api_key=YOUR_KEY`. Verify at [Splitwise Apps](https://secure.splitwise.com/apps). |
+| "Email not configured" | All three variables required: `GMAIL_ADDRESS`, `GMAIL_APP_PASSWORD`, `RECIPIENT_EMAIL`. App password must be 16 characters. |
+| "Failed to upload to Google Drive" | Verify all `GDRIVE_*` variables are set. Run `get_gdrive_token.py` to refresh expired tokens. |
+| Dashboard shows no data | Check `group_id` is correct, or remove it to fetch from all groups. |
 
-### "Email not configured"
-- All three variables are required: `GMAIL_ADDRESS`, `GMAIL_APP_PASSWORD`, `RECIPIENT_EMAIL`
-- Make sure the app password is 16 characters (no spaces)
-
-### "Failed to upload to Google Drive"
-- Verify all four `GDRIVE_*` variables are set
-- Run `get_gdrive_token.py` again to refresh the token if expired
-
-### Dashboard shows no data
-- Check that `group_id` is correct (or remove it to fetch all groups)
-- Verify your Splitwise account has expenses in the specified group
+For detailed logs, run with `--full-log`:
+```bash
+python family_expenses.py --local --full-log
+```
 
 ---
 
+## Contributing
+
+Contributions are welcome. Please open an issue to discuss changes before submitting a pull request.
+
 ## License
 
-This project is provided as-is for personal use.
+This project is provided as-is under the MIT License.
