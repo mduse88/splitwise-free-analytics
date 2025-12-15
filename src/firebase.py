@@ -6,6 +6,7 @@ import re
 import subprocess
 import json
 from src.config import email as email_config
+from src.logging_utils import log_info, log_verbose, log_error
 
 
 def get_allowed_emails() -> list[str]:
@@ -38,12 +39,12 @@ def prepare_deployment(dashboard_html_path: str) -> bool:
     
     # Check if firebase_public directory exists
     if not os.path.exists(firebase_public):
-        print("ERROR: firebase_public directory not found")
+        log_info("ERROR: firebase_public directory not found")
         return False
     
     # Check if index.html exists
     if not os.path.exists(index_html_path):
-        print("ERROR: firebase_public/index.html not found")
+        log_info("ERROR: firebase_public/index.html not found")
         return False
     
     # Read dashboard HTML and encode it
@@ -52,13 +53,13 @@ def prepare_deployment(dashboard_html_path: str) -> bool:
             dashboard_content = f.read()
         dashboard_base64 = base64.b64encode(dashboard_content.encode("utf-8")).decode("ascii")
     except Exception as e:
-        print(f"ERROR: Failed to read dashboard: {e}")
+        log_error("ERROR: Failed to read dashboard", str(e))
         return False
     
     # Get allowed emails
     allowed_emails = get_allowed_emails()
     if not allowed_emails:
-        print("WARNING: No allowed emails configured (RECIPIENT_EMAIL)")
+        log_verbose("WARNING: No allowed emails configured (RECIPIENT_EMAIL)")
     
     # Read index.html and inject both dashboard data and allowed emails
     try:
@@ -73,7 +74,7 @@ def prepare_deployment(dashboard_html_path: str) -> bool:
         with open(index_html_path, "w", encoding="utf-8") as f:
             f.write(content)
     except Exception as e:
-        print(f"ERROR: Failed to prepare index.html: {e}")
+        log_error("ERROR: Failed to prepare index.html", str(e))
         return False
     
     # Remove dashboard.html if it exists (security: prevent direct access)
@@ -111,7 +112,7 @@ def deploy() -> str | None:
         )
         
         if result.returncode != 0:
-            print(f"ERROR: Firebase deploy failed: {result.stderr}")
+            log_error("ERROR: Firebase deploy failed", result.stderr)
             return None
         
         # Extract URL from output
@@ -134,13 +135,13 @@ def deploy() -> str | None:
         return None
         
     except subprocess.TimeoutExpired:
-        print("ERROR: Firebase deploy timed out")
+        log_info("ERROR: Firebase deploy timed out")
         return None
     except FileNotFoundError:
-        print("ERROR: Firebase CLI not found. Install with: npm install -g firebase-tools")
+        log_info("ERROR: Firebase CLI not found")
         return None
     except Exception as e:
-        print(f"ERROR: Firebase deploy failed: {e}")
+        log_error("ERROR: Firebase deploy failed", str(e))
         return None
 
 

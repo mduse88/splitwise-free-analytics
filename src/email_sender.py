@@ -6,6 +6,7 @@ from email.mime.text import MIMEText
 
 from src.config import app as app_config
 from src.config import email as config
+from src.logging_utils import log_error
 
 
 def send_dashboard(dashboard_link: str, summary: dict) -> None:
@@ -50,7 +51,7 @@ def send_dashboard(dashboard_link: str, summary: dict) -> None:
             server.sendmail(config.gmail_address, recipient_list, msg.as_string())
         pass  # Email sent successfully
     except Exception as e:
-        print("ERROR: Failed to send email")
+        log_error("ERROR: Failed to send email", str(e))
         raise
 
 

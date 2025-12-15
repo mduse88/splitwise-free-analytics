@@ -1,7 +1,6 @@
 """Google Drive upload module - uploads files using OAuth."""
 
 import os
-
 import io
 
 from google.auth.transport.requests import Request
@@ -10,6 +9,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 
 from src.config import gdrive as config
+from src.logging_utils import log_error
 
 
 # MIME type mapping
@@ -54,7 +54,7 @@ def upload_files(files: list[tuple[str, str]], timestamp: str) -> dict[str, str]
             file_ids[key] = file_id
                 
     except Exception as e:
-        print("ERROR: Failed to upload to Google Drive")
+        log_error("ERROR: Failed to upload to Google Drive", str(e))
         raise
     
     return file_ids

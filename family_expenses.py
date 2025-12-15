@@ -18,6 +18,8 @@ import pandas as pd
 from src import splitwise_client, dashboard, gdrive, email_sender, stats, firebase
 from src.config import app as app_config
 from src.config import gdrive as gdrive_config, email as email_config
+from src import logging_utils
+from src.logging_utils import log_info, log_verbose
 
 
 def parse_args() -> argparse.Namespace:
@@ -190,16 +192,9 @@ def create_local_files(raw_df, timestamp: str) -> tuple[str, str, str]:
 def main() -> None:
     """Main entry point."""
     args = parse_args()
-    full_log = args.full_log
     
-    def log_info(message: str) -> None:
-        """Minimal logging always shown."""
-        print(message)
-    
-    def log_verbose(message: str) -> None:
-        """Verbose logging shown only when full_log is enabled."""
-        if full_log:
-            print(message)
+    # Configure centralized verbose logging for all modules
+    logging_utils.set_verbose(args.full_log)
     
     log_verbose(f"=== Starting {app_config.title} ===")
     
@@ -231,7 +226,7 @@ def main() -> None:
     processed_df = splitwise_client.process_for_dashboard(raw_df)
     
     log_verbose(f"Dashboard data: {len(processed_df)} expenses")
-    if not processed_df.empty and full_log:
+    if not processed_df.empty and logging_utils.is_verbose():
         log_verbose(f"Date range: {processed_df['date'].min()} to {processed_df['date'].max()}")
         log_verbose(f"Months found: {processed_df['month_str'].nunique()}")
     
