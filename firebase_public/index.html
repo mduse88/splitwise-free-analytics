@@ -6,6 +6,7 @@
     <title>Family Expenses Dashboard</title>
     <script defer src="/__/firebase/12.6.0/firebase-app-compat.js"></script>
     <script defer src="/__/firebase/12.6.0/firebase-auth-compat.js"></script>
+    <script defer src="/__/firebase/12.6.0/firebase-firestore-compat.js"></script>
     <script defer src="/__/firebase/init.js"></script>
     <style>
         /* Login page styles - scoped to avoid conflicts with dashboard */
@@ -46,8 +47,10 @@
     <div id="dashboard-container"></div>
     <script id="dashboard-data" type="text/plain">__DASHBOARD_DATA_PLACEHOLDER__</script>
     <script>
-        // Security: Store hashes instead of plaintext emails to prevent PII exposure
+        // Security: Store hashes for client-side auth check
         const ALLOWED_HASHES = __ALLOWED_HASHES_PLACEHOLDER__;
+        // Fallback key (null if key is in Firestore, hex string if fallback)
+        const FALLBACK_KEY = __ENCRYPTION_KEY_PLACEHOLDER__;
         
         // Hash email using SHA-256 (matches server-side hashing)
         async function hashEmail(email) {
@@ -56,6 +59,59 @@
             const hashBuffer = await crypto.subtle.digest('SHA-256', data);
             return Array.from(new Uint8Array(hashBuffer))
                 .map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+        
+        // Convert hex string to Uint8Array
+        function hexToBytes(hex) {
+            const bytes = new Uint8Array(hex.length / 2);
+            for (let i = 0; i < hex.length; i += 2) {
+                bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+            }
+            return bytes;
+        }
+        
+        // Fetch encryption key from Firestore (secure, requires auth)
+        async function fetchKeyFromFirestore() {
+            try {
+                const db = firebase.firestore();
+                const doc = await db.collection('config').doc('dashboard').get();
+                if (doc.exists) {
+                    const data = doc.data();
+                    return data.encryptionKey;
+                }
+            } catch (e) {
+                console.error('Failed to fetch key from Firestore:', e);
+            }
+            return null;
+        }
+        
+        // Import raw key bytes as CryptoKey
+        async function importKey(keyHex) {
+            const keyBytes = hexToBytes(keyHex);
+            return await crypto.subtle.importKey(
+                'raw',
+                keyBytes,
+                { name: 'AES-GCM', length: 256 },
+                false,
+                ['decrypt']
+            );
+        }
+        
+        // Decrypt AES-GCM encrypted dashboard
+        async function decryptDashboard(encryptedHex, keyHex) {
+            const encrypted = hexToBytes(encryptedHex);
+            const nonce = encrypted.slice(0, 12);  // First 12 bytes are nonce
+            const ciphertext = encrypted.slice(12);  // Rest is ciphertext + tag
+            
+            const key = await importKey(keyHex);
+            
+            const decrypted = await crypto.subtle.decrypt(
+                { name: 'AES-GCM', iv: nonce },
+                key,
+                ciphertext
+            );
+            
+            return new TextDecoder().decode(decrypted);
         }
         
         function signIn() {
@@ -70,11 +126,22 @@
             document.getElementById('loading').classList.add('hidden');
             document.getElementById('sign-out-btn').style.display = showSignOut ? 'inline-block' : 'none';
         }
-        function showDashboard() {
-            const encodedData = document.getElementById('dashboard-data').textContent.trim();
-            if (encodedData && !encodedData.includes('PLACEHOLDER')) {
+        async function showDashboard() {
+            const encryptedData = document.getElementById('dashboard-data').textContent.trim();
+            if (encryptedData && !encryptedData.includes('PLACEHOLDER')) {
                 try {
-                    const dashboardHtml = new TextDecoder().decode(Uint8Array.from(atob(encodedData), c => c.charCodeAt(0)));
+                    // Get encryption key (from Firestore or fallback)
+                    let keyHex = FALLBACK_KEY;
+                    if (!keyHex) {
+                        keyHex = await fetchKeyFromFirestore();
+                        if (!keyHex) {
+                            throw new Error('Could not retrieve encryption key');
+                        }
+                    }
+                    
+                    // Decrypt the dashboard using AES-GCM
+                    const dashboardHtml = await decryptDashboard(encryptedData, keyHex);
+                    
                     const parser = new DOMParser();
                     const doc = parser.parseFromString(dashboardHtml, 'text/html');
                     doc.querySelectorAll('style').forEach(style => { document.head.appendChild(style.cloneNode(true)); });
@@ -99,7 +166,7 @@
                         inlineScripts.forEach(code => { const s = document.createElement('script'); s.textContent = code; document.body.appendChild(s); });
                     });
                     document.body.classList.add('authenticated');
-                } catch (e) { showError('Failed to load dashboard: ' + e.message); }
+                } catch (e) { showError('Failed to decrypt dashboard: ' + e.message); }
             } else { showError('Dashboard content not available'); }
         }
         document.addEventListener('DOMContentLoaded', function() {
@@ -109,7 +176,7 @@
                         document.getElementById('loading').classList.remove('hidden');
                         document.getElementById('sign-in-btn').classList.add('hidden');
                         const userHash = await hashEmail(user.email);
-                        if (ALLOWED_HASHES.includes(userHash)) { showDashboard(); }
+                        if (ALLOWED_HASHES.includes(userHash)) { await showDashboard(); }
                         else { showError('Access denied. Your account is not authorized.', true); }
                     } else {
                         document.body.classList.remove('authenticated');
