@@ -1,9 +1,14 @@
 # Splitwise Expense Dashboard
 
-Track your Splitwise expenses with an interactive dashboard, automatic cloud backups, and monthly email reports.
-
 ![Python](https://img.shields.io/badge/python-3.11+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
+
+The analytics Splitwise charges for — plus features it doesn't have — for free.
+Track your Splitwise expenses with an interactive dashboard, automatic cloud backups, and monthly email reports.
+
+> *"How much did we actually spend last month?"*  
+> *"Which categories are eating our budget?"*  
+> *"Can I get a monthly report in my inbox?"*
 
 ## Overview
 
