@@ -255,8 +255,12 @@ def main() -> None:
                 (csv_path, "expenses.csv"),
                 (html_path, "expenses_dashboard.html"),
             ]
-            gdrive.upload_files(files_to_upload, timestamp)
-            log_verbose("Files uploaded to Google Drive (backup)")
+            try:
+                gdrive.upload_files(files_to_upload, timestamp)
+                log_verbose("Files uploaded to Google Drive (backup)")
+            except Exception as e:
+                # Don't abort the whole run (Firebase deploy + email can still succeed).
+                log_info(f"WARNING: Google Drive backup failed (skipping): {e}")
         else:
             log_verbose("Google Drive not configured - skipping backup")
         

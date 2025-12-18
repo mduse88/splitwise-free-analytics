@@ -4,6 +4,7 @@ import os
 import io
 
 from google.auth.transport.requests import Request
+from google.auth.exceptions import RefreshError
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
@@ -54,6 +55,10 @@ def upload_files(files: list[tuple[str, str]], timestamp: str) -> dict[str, str]
             file_ids[key] = file_id
                 
     except Exception as e:
+        # If the refresh token is expired/revoked we expect callers to handle it (skip backup),
+        # so avoid printing a scary ERROR line in that case.
+        if isinstance(e, ValueError) and str(e).startswith("Google Drive OAuth refresh failed (invalid_grant"):
+            raise
         log_error("ERROR: Failed to upload to Google Drive", str(e))
         raise
     
@@ -203,7 +208,18 @@ def _create_credentials() -> Credentials:
         client_secret=config.client_secret,
         scopes=["https://www.googleapis.com/auth/drive.file"],
     )
-    credentials.refresh(Request())
+    try:
+        credentials.refresh(Request())
+    except Exception as e:
+        # Fail with an actionable message for the common invalid_grant case.
+        # This is not fixable in code: the refresh token must be regenerated.
+        if isinstance(e, RefreshError) and "invalid_grant" in str(e):
+            raise ValueError(
+                "Google Drive OAuth refresh failed (invalid_grant: token expired or revoked). "
+                "Regenerate GDRIVE_REFRESH_TOKEN (and ensure it matches the current client_id/client_secret), "
+                "then re-run."
+            ) from e
+        raise
     return credentials
 
 

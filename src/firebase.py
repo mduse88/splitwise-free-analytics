@@ -43,7 +43,7 @@ def _init_firebase_admin():
         return False
 
 
-def _store_key_in_firestore(key_hex: str, allowed_hashes: list[str], allowed_emails: list[str]) -> bool:
+def _store_key_in_firestore(key_hex: str, allowed_emails: list[str]) -> bool:
     """Store encryption key in Firestore.
     
     Security: The key is stored in Firestore, not in the page source.
@@ -52,7 +52,6 @@ def _store_key_in_firestore(key_hex: str, allowed_hashes: list[str], allowed_ema
     
     Args:
         key_hex: Hex-encoded AES-256 key.
-        allowed_hashes: List of authorized email hashes (for client-side display).
         allowed_emails: List of authorized emails (for Firestore rule validation).
         
     Returns:
@@ -65,7 +64,6 @@ def _store_key_in_firestore(key_hex: str, allowed_hashes: list[str], allowed_ema
         doc_ref = _firestore_client.collection("config").document("dashboard")
         doc_ref.set({
             "encryptionKey": key_hex,
-            "authorizedHashes": allowed_hashes,
             "authorizedEmails": allowed_emails,  # Used by Firestore rules for auth
             "updatedAt": firestore.SERVER_TIMESTAMP,
         })
@@ -74,22 +72,6 @@ def _store_key_in_firestore(key_hex: str, allowed_hashes: list[str], allowed_ema
     except Exception as e:
         log_error("ERROR: Failed to store key in Firestore", str(e))
         return False
-
-
-def hash_email(email: str) -> str:
-    """Hash an email address using SHA-256.
-    
-    Security: Hashing prevents PII exposure in deployed code.
-    Even if someone views page source, they cannot reverse the hash
-    to discover email addresses.
-    
-    Args:
-        email: Email address to hash.
-        
-    Returns:
-        SHA-256 hex digest of the lowercase, trimmed email.
-    """
-    return hashlib.sha256(email.lower().strip().encode()).hexdigest()
 
 
 def get_allowed_emails() -> list[str]:
@@ -103,18 +85,6 @@ def get_allowed_emails() -> list[str]:
     
     emails = [e.strip().lower() for e in email_config.recipient_email.split(",")]
     return [e for e in emails if e]  # Filter out empty strings
-
-
-def get_allowed_email_hashes() -> list[str]:
-    """Get list of SHA-256 hashes of allowed emails from RECIPIENT_EMAIL config.
-    
-    Security: Returns hashes instead of plaintext emails to prevent
-    PII exposure in the deployed Firebase page.
-    
-    Returns:
-        List of SHA-256 hashes of email addresses.
-    """
-    return [hash_email(e) for e in get_allowed_emails()]
 
 
 def encrypt_dashboard_with_random_key(html: str) -> tuple[str, str]:
@@ -175,7 +145,6 @@ def prepare_deployment(dashboard_html_path: str) -> bool:
     
     # Get allowed emails and hashes
     allowed_emails = get_allowed_emails()
-    allowed_hashes = [hash_email(e) for e in allowed_emails]
     if not allowed_emails:
         log_verbose("WARNING: No allowed emails configured (RECIPIENT_EMAIL)")
     
@@ -195,21 +164,19 @@ def prepare_deployment(dashboard_html_path: str) -> bool:
     #
     # Security: We must NEVER embed the key in the page source. If Firestore storage fails,
     # we abort deployment to prevent accidental plaintext-key exposure.
-    if not _store_key_in_firestore(key_hex, allowed_hashes, allowed_emails):
+    if not _store_key_in_firestore(key_hex, allowed_emails):
         log_error(
             "ERROR: Failed to store key in Firestore. Refusing to deploy without Firestore-backed key.",
             "Check FIREBASE_SERVICE_ACCOUNT / Firestore setup / permissions."
         )
         return False
     
-    # Read index.html and inject encrypted dashboard and allowed hashes
+    # Read index.html and inject encrypted dashboard
     try:
         with open(index_html_path, "r", encoding="utf-8") as f:
             content = f.read()
         
         # Replace placeholders
-        hashes_json = json.dumps(allowed_hashes)
-        content = content.replace("__ALLOWED_HASHES_PLACEHOLDER__", hashes_json)
         content = content.replace("__DASHBOARD_DATA_PLACEHOLDER__", encrypted_hex)
         
         with open(index_html_path, "w", encoding="utf-8") as f:
@@ -320,7 +287,7 @@ def restore_index_html() -> None:
     """
     index_html_path = "firebase_public/index.html"
     
-    # Clean template content with placeholders (Firestore key version)
+    # Clean template content with placeholders (Firestore key version, no client allowlist)
     template = '''<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -370,18 +337,6 @@ def restore_index_html() -> None:
     <div id="dashboard-container"></div>
     <script id="dashboard-data" type="text/plain">__DASHBOARD_DATA_PLACEHOLDER__</script>
     <script>
-        // Security: Store hashes for client-side auth check
-        const ALLOWED_HASHES = __ALLOWED_HASHES_PLACEHOLDER__;
-        
-        // Hash email using SHA-256 (matches server-side hashing)
-        async function hashEmail(email) {
-            const encoder = new TextEncoder();
-            const data = encoder.encode(email.toLowerCase().trim());
-            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-            return Array.from(new Uint8Array(hashBuffer))
-                .map(b => b.toString(16).padStart(2, '0')).join('');
-        }
-        
         // Convert hex string to Uint8Array
         function hexToBytes(hex) {
             const bytes = new Uint8Array(hex.length / 2);
@@ -393,17 +348,11 @@ def restore_index_html() -> None:
         
         // Fetch encryption key from Firestore (secure, requires auth)
         async function fetchKeyFromFirestore() {
-            try {
-                const db = firebase.firestore();
-                const doc = await db.collection('config').doc('dashboard').get();
-                if (doc.exists) {
-                    const data = doc.data();
-                    return data.encryptionKey;
-                }
-            } catch (e) {
-                console.error('Failed to fetch key from Firestore:', e);
-            }
-            return null;
+            const db = firebase.firestore();
+            const doc = await db.collection('config').doc('dashboard').get();
+            if (!doc.exists) return null;
+            const data = doc.data() || {};
+            return data.encryptionKey || null;
         }
         
         // Import raw key bytes as CryptoKey
@@ -484,7 +433,13 @@ def restore_index_html() -> None:
                         inlineScripts.forEach(code => { const s = document.createElement('script'); s.textContent = code; document.body.appendChild(s); });
                     });
                     document.body.classList.add('authenticated');
-                } catch (e) { showError('Failed to decrypt dashboard: ' + e.message); }
+                } catch (e) {
+                    if (e && e.code === 'permission-denied') {
+                        showError('Access denied. Your account is not authorized.', true);
+                        return;
+                    }
+                    showError('Failed to decrypt dashboard: ' + (e?.message || String(e)));
+                }
             } else { showError('Dashboard content not available'); }
         }
         document.addEventListener('DOMContentLoaded', function() {
@@ -493,9 +448,7 @@ def restore_index_html() -> None:
                     if (user) {
                         document.getElementById('loading').classList.remove('hidden');
                         document.getElementById('sign-in-btn').classList.add('hidden');
-                        const userHash = await hashEmail(user.email);
-                        if (ALLOWED_HASHES.includes(userHash)) { await showDashboard(); }
-                        else { showError('Access denied. Your account is not authorized.', true); }
+                        await showDashboard();
                     } else {
                         document.body.classList.remove('authenticated');
                         document.getElementById('login-container').classList.remove('hidden');
