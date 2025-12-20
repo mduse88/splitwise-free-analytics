@@ -357,6 +357,16 @@
             background: var(--bg-card);
             border-radius: var(--radius-md);
             border: 1px solid var(--border-color);
+            position: sticky;
+            top: -1px;
+            z-index: 100;
+            transition: box-shadow var(--transition-normal), border-radius var(--transition-normal);
+            margin-bottom: 24px;
+        }
+
+        .filters-section.is-stuck {
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            border-radius: 0 0 var(--radius-md) var(--radius-md);
         }
 
         .filters-header {
@@ -589,6 +599,18 @@
             min-height: 400px;
         }
 
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 16px;
+            gap: 12px;
+        }
+
+        .chart-header-text {
+            flex: 1;
+        }
+
         .chart-title {
             font-family: var(--font-heading);
             font-size: 1rem;
@@ -600,7 +622,36 @@
         .chart-desc {
             color: var(--text-muted);
             font-size: 0.8rem;
-            margin-bottom: 16px;
+        }
+
+        .chart-toggle {
+            display: flex;
+            gap: 4px;
+            background: var(--bg-primary);
+            padding: 4px;
+            border-radius: var(--radius-sm);
+        }
+
+        .chart-toggle-btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-family: var(--font-body);
+            font-weight: 500;
+            cursor: pointer;
+            background: transparent;
+            color: var(--text-muted);
+            transition: all var(--transition-fast);
+        }
+
+        .chart-toggle-btn:hover {
+            color: var(--text-primary);
+        }
+
+        .chart-toggle-btn.active {
+            background: var(--accent-coral);
+            color: white;
         }
 
         /* ==================== Table ==================== */
@@ -704,7 +755,7 @@
 
         .expense-card-meta {
             display: flex;
-            gap: 16px;
+            justify-content: space-between;
             font-size: 0.8rem;
             color: var(--text-muted);
         }
@@ -964,13 +1015,8 @@
         </details>
         {% endif %}
 
-        <!-- Filters Section -->
-        <div class="section">
-            <div class="section-header">
-                <div class="section-title">🔍 Filter & Explore</div>
-                <div class="section-desc">Adjust filters to focus on specific time periods and categories</div>
-            </div>
-            <div class="filters-section" id="filters-section">
+        <!-- Filters Section (outside .section wrapper for sticky to work) -->
+        <div class="filters-section" id="filters-section">
                 <div class="filters-header" onclick="toggleFilters()">
                     <div class="filters-toggle">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1018,7 +1064,6 @@
                     <button class="reset-btn" onclick="resetFilters()">Reset</button>
                 </div>
             </div>
-        </div>
 
         <!-- KPI Cards -->
         <div class="kpi-grid" id="kpi-grid">
@@ -1057,8 +1102,16 @@
                     <div id="monthly-chart"></div>
                 </div>
                 <div class="chart-box">
-                    <div class="chart-title">Spending by Category</div>
-                    <div class="chart-desc">Where your money goes across categories</div>
+                    <div class="chart-header">
+                        <div class="chart-header-text">
+                            <div class="chart-title">Spending by Category</div>
+                            <div class="chart-desc">Where your money goes across categories</div>
+                        </div>
+                        <div class="chart-toggle">
+                            <button class="chart-toggle-btn" onclick="setCategoryChartType('bar')">Bar</button>
+                            <button class="chart-toggle-btn active" onclick="setCategoryChartType('pie')">Pie</button>
+                        </div>
+                    </div>
                     <div id="category-chart"></div>
                 </div>
             </div>
@@ -1194,6 +1247,10 @@
         function toggleFilters() {
             const section = document.getElementById('filters-section');
             section.classList.toggle('collapsed');
+            // Mark as manually toggled to prevent auto-collapse override
+            section.dataset.manualToggle = 'true';
+            // Reset manual toggle after a short delay so scroll behavior resumes
+            setTimeout(() => { section.dataset.manualToggle = 'false'; }, 1000);
         }
 
         // Collapse filters on mobile by default
@@ -1201,7 +1258,60 @@
             document.getElementById('filters-section').classList.add('collapsed');
         }
 
+        // Sticky filters: auto-collapse on scroll
+        (function() {
+            const filtersSection = document.getElementById('filters-section');
+            // Store initial position before any sticky behavior
+            const initialTop = filtersSection.getBoundingClientRect().top + window.scrollY;
+            let isStuck = false;
+            let wasAutoCollapsed = false;
+
+            window.addEventListener('scroll', function() {
+                const scrollY = window.scrollY;
+                const rect = filtersSection.getBoundingClientRect();
+                
+                // Detect if element is stuck (top is at or near 0)
+                const nowStuck = rect.top <= 1;
+                
+                if (nowStuck && !isStuck) {
+                    filtersSection.classList.add('is-stuck');
+                    isStuck = true;
+                } else if (!nowStuck && isStuck) {
+                    filtersSection.classList.remove('is-stuck');
+                    isStuck = false;
+                }
+
+                // Auto-collapse when stuck and scrolled significantly
+                if (filtersSection.dataset.manualToggle !== 'true') {
+                    // Auto-collapse after scrolling 150px past initial position
+                    if (scrollY > initialTop + 150 && !wasAutoCollapsed) {
+                        filtersSection.classList.add('collapsed');
+                        wasAutoCollapsed = true;
+                    } 
+                    // Auto-expand when scrolling back to top
+                    else if (scrollY <= initialTop + 20 && wasAutoCollapsed) {
+                        filtersSection.classList.remove('collapsed');
+                        wasAutoCollapsed = false;
+                    }
+                }
+            });
+        })();
+
         // ==================== Chart Functions ====================
+
+        // Category chart type state: 'bar' or 'pie'
+        let categoryChartType = 'pie';
+
+        function setCategoryChartType(type) {
+            categoryChartType = type;
+            // Update toggle button styles
+            document.querySelectorAll('.chart-toggle-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.textContent.toLowerCase() === type);
+            });
+            // Re-render the chart with current filtered data
+            const filtered = getFilteredData();
+            renderCategoryChart(filtered);
+        }
 
         const chartLayout = {
             paper_bgcolor: 'rgba(0,0,0,0)',
@@ -1292,28 +1402,83 @@
         function renderCategoryChart(data) {
             const { categories, totals, top5Hover } = aggregateByCategory(data);
 
-            const trace = {
-                x: categories,
-                y: totals,
-                type: 'bar',
-                text: totals.map(t => formatCurrency(t)),
-                textposition: 'outside',
-                textfont: { color: '#94a3b8', size: 10 },
-                hovertemplate: categories.map((c, i) =>
-                    `<b>${c}</b><br>Total: ${formatCurrency(totals[i])}<br><br><b>Top 5:</b><br>${top5Hover[i]}<extra></extra>`
-                ),
-                marker: {
-                    color: '#fb923c',
-                    line: { width: 0 }
+            if (categoryChartType === 'pie') {
+                // Pie chart: show top 5 categories + "Others" for the rest
+                // Always represents 100% of expenses
+                const topN = 5;
+                let pieLabels = [];
+                let pieValues = [];
+                let pieHover = [];
+                
+                if (categories.length <= topN) {
+                    // 5 or fewer categories: show all, no "Others" needed
+                    pieLabels = categories;
+                    pieValues = totals;
+                    pieHover = top5Hover;
+                } else {
+                    // More than 5 categories: show top 5 + "Others"
+                    pieLabels = categories.slice(0, topN);
+                    pieValues = totals.slice(0, topN);
+                    pieHover = top5Hover.slice(0, topN);
+                    
+                    // "Others" combines all remaining categories
+                    const othersTotal = totals.slice(topN).reduce((sum, v) => sum + v, 0);
+                    const othersCategories = categories.slice(topN);
+                    pieLabels.push('Others');
+                    pieValues.push(othersTotal);
+                    pieHover.push(`Includes: ${othersCategories.join(', ')}`);
                 }
-            };
 
-            const layout = {
-                ...chartLayout,
-                margin: { ...chartLayout.margin, b: 100 },
-                xaxis: { ...chartLayout.xaxis, type: 'category' }
-            };
-            Plotly.react('category-chart', [trace], layout, chartConfig);
+                const grandTotal = pieValues.reduce((sum, v) => sum + v, 0);
+
+                const trace = {
+                    labels: pieLabels,
+                    values: pieValues,
+                    type: 'pie',
+                    hole: 0.4,
+                    textinfo: 'label+percent',
+                    textposition: 'outside',
+                    textfont: { color: '#f1f5f9', size: 11 },
+                    hovertemplate: pieLabels.map((label, i) =>
+                        `<b>${label}</b><br>${formatCurrency(pieValues[i])} (${((pieValues[i]/grandTotal)*100).toFixed(1)}%)<extra></extra>`
+                    ),
+                    marker: {
+                        colors: ['#fb923c', '#60a5fa', '#10b981', '#8b5cf6', '#f97316', '#94a3b8'],
+                        line: { color: '#1e293b', width: 2 }
+                    }
+                };
+
+                const layout = {
+                    ...chartLayout,
+                    showlegend: false,
+                    margin: { t: 40, b: 40, l: 40, r: 40 }
+                };
+                Plotly.react('category-chart', [trace], layout, chartConfig);
+            } else {
+                // Bar chart (default)
+                const trace = {
+                    x: categories,
+                    y: totals,
+                    type: 'bar',
+                    text: totals.map(t => formatCurrency(t)),
+                    textposition: 'outside',
+                    textfont: { color: '#94a3b8', size: 10 },
+                    hovertemplate: categories.map((c, i) =>
+                        `<b>${c}</b><br>Total: ${formatCurrency(totals[i])}<br><br><b>Top 5:</b><br>${top5Hover[i]}<extra></extra>`
+                    ),
+                    marker: {
+                        color: '#fb923c',
+                        line: { width: 0 }
+                    }
+                };
+
+                const layout = {
+                    ...chartLayout,
+                    margin: { ...chartLayout.margin, b: 100 },
+                    xaxis: { ...chartLayout.xaxis, type: 'category' }
+                };
+                Plotly.react('category-chart', [trace], layout, chartConfig);
+            }
         }
 
         // ==================== Multi-Select Functions ====================
